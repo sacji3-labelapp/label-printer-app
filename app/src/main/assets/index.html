@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Barcode Label Printer 55×30</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--text:#1a1d21;--muted:#667085;--accent:#2563eb;--border:#d9dde3;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14161a;--card:#1d2026;--text:#eef0f3;--muted:#9aa3b2;--accent:#6b9bff;--border:#343a44}}
+:root[data-theme="dark"]{--bg:#14161a;--card:#1d2026;--text:#eef0f3;--muted:#9aa3b2;--accent:#6b9bff;--border:#343a44}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:520px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 12px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:13px;color:var(--muted);margin:8px 0 4px}
+input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
+textarea{font-family:ui-monospace,Menlo,monospace;font-size:12px;height:130px}
+.row{display:flex;gap:8px}.row>*{flex:1}
+button{padding:11px 14px;border:0;border-radius:8px;background:var(--accent);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+button.sec{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.chk{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:14px}.chk input{width:auto}
+#preview{display:flex;justify-content:center;overflow-x:auto}
+.lbl{width:55mm;height:30mm;background:#fff;color:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px dashed #999;box-sizing:border-box;overflow:hidden;font-family:Arial,sans-serif}
+.lbl svg{width:50mm;height:22mm}
+.lbl small{font-size:8pt;margin-top:-1mm}
+#printArea{display:none}
+@media print{
+ @page{size:55mm 30mm;margin:0}
+ body{background:#fff}
+ main{display:none}
+ #printArea{display:block}
+ #printArea .lbl{border:0;page-break-after:always;break-after:page}
+}
+</style>
+</head>
+<body>
+<main>
+ <h1>Barcode Label Printer <span style="color:var(--muted);font-weight:400">55×30 mm</span></h1>
+ <div class="card">
+  <label for="code">Scan or type barcode</label>
+  <input id="code" autofocus autocomplete="off" inputmode="text" placeholder="Scan now (press Enter after typing)">
+  <div class="row">
+   <div><label for="fmt">Format</label>
+    <select id="fmt"><option value="CODE128">Code 128</option><option value="EAN13">EAN-13</option><option value="CODE39">Code 39</option></select></div>
+   <div><label for="qty">Copies</label><input id="qty" type="number" min="1" max="200" value="1"></div>
+  </div>
+  <label class="chk"><input type="checkbox" id="auto"> Print automatically after each scan</label>
+  <div class="row" style="margin-top:12px">
+   <button id="printBtn">Print label</button>
+   <button class="sec" id="camBtn">Scan with camera</button>
+  </div>
+  <video id="vid" playsinline muted style="display:none;width:100%;margin-top:10px;border-radius:8px"></video>
+  <div id="msg" style="color:var(--muted);font-size:13px;margin-top:8px"></div>
+ </div>
+ <div class="card"><div id="preview"></div></div>
+ <div class="card">
+  <label for="tspl">Printer commands (TSPL) for direct printing</label>
+  <textarea id="tspl" readonly></textarea>
+  <button class="sec" id="copyBtn" style="margin-top:8px">Copy commands</button>
+ </div>
+</main>
+<div id="printArea"></div>
+<script>
+const $=id=>document.getElementById(id);
+const code=$('code'),fmt=$('fmt'),qty=$('qty'),msg=$('msg');
+const tsplType={CODE128:'128',EAN13:'EAN13',CODE39:'39'};
+function labelEl(v){
+ const d=document.createElement('div');d.className='lbl';
+ const s=document.createElementNS('http://www.w3.org/2000/svg','svg');d.appendChild(s);
+ try{JsBarcode(s,v,{format:fmt.value,displayValue:false,margin:0,height:70,width:2});}
+ catch(e){d.textContent='Invalid value for '+fmt.value;return d}
+ const t=document.createElement('small');t.textContent=v;d.appendChild(t);return d;
+}
+function render(){
+ const v=code.value.trim();
+ $('preview').innerHTML='';
+ if(!v){$('tspl').value='';return}
+ $('preview').appendChild(labelEl(v));
+ const n=Math.max(1,parseInt(qty.value)||1);
+ $('tspl').value=['SIZE 55 mm,30 mm','GAP 2 mm,0 mm','DIRECTION 1','CLS',
+  'BARCODE 30,30,"'+tsplType[fmt.value]+'",110,1,0,3,6,"'+v.replace(/"/g,'')+'"','PRINT '+n+',1'].join('\r\n');
+}
+let fresh=false;
+function clearAll(){code.value='';fresh=false;render();code.focus();}
+function doPrint(){
+ const v=code.value.trim();if(!v){msg.textContent='Enter or scan a barcode first.';return}
+ const n=Math.max(1,Math.min(200,parseInt(qty.value)||1));
+ const pa=$('printArea');pa.innerHTML='';
+ for(let i=0;i<n;i++)pa.appendChild(labelEl(v));
+ window.print();
+ clearAll();
+}
+code.addEventListener('input',render);fmt.addEventListener('change',render);qty.addEventListener('input',render);
+code.addEventListener('keydown',e=>{
+ if(e.key==='Enter'){e.preventDefault();if(!code.value.trim())return;render();if($('auto').checked){doPrint();}else{fresh=true;code.select()}return}
+ if(fresh&&e.key.length===1&&!e.ctrlKey&&!e.metaKey){code.value='';fresh=false;}
+});
+$('printBtn').onclick=doPrint;
+$('copyBtn').onclick=async()=>{try{await navigator.clipboard.writeText($('tspl').value);msg.textContent='Commands copied.'}catch(e){$('tspl').select();msg.textContent='Select and copy manually.'}};
+let stream=null,timer=null;
+$('camBtn').onclick=async()=>{
+ const vid=$('vid');
+ if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;clearInterval(timer);vid.style.display='none';return}
+ if(!('BarcodeDetector' in window)){msg.textContent='Camera scanning is not supported here. Use the built-in scanner instead.';return}
+ try{
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+  vid.srcObject=stream;vid.style.display='block';await vid.play();
+  const det=new BarcodeDetector();
+  timer=setInterval(async()=>{
+   try{const r=await det.detect(vid);
+    if(r.length){code.value=r[0].rawValue;render();
+     stream.getTracks().forEach(t=>t.stop());stream=null;clearInterval(timer);vid.style.display='none';
+     if($('auto').checked)doPrint();}
+   }catch(e){}
+  },400);
+ }catch(e){msg.textContent='Camera unavailable or permission denied.'}
+};
+</script>
+</body>
+</html>
